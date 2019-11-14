@@ -89,7 +89,7 @@ needed_options = {
 }
 
 
-def astra(tomo, center, recon, theta, **kwargs):
+def astra(tomo, center, recon, theta, astra_mod=None, **kwargs):
     """
     Reconstruct object using the ASTRA toolbox
 
@@ -127,8 +127,8 @@ def astra(tomo, center, recon, theta, **kwargs):
     >>> pylab.show()
     """
     # Lazy import ASTRA
-    import astra as astra_mod
-
+    if astra_mod is None:
+        import astra as astra_mod
     # Unpack arguments
     nslices = tomo.shape[0]
     num_gridx = kwargs['num_gridx']
@@ -138,8 +138,9 @@ def astra(tomo, center, recon, theta, **kwargs):
     # Check options
     for o in needed_options['astra']:
         if o not in opts:
-            logger.error("Option %s needed for ASTRA reconstruction." % (o,))
-            raise ValueError()
+            msg = "Option %s needed for ASTRA reconstruction." % (o,)
+            logger.error(msg)
+            raise ValueError(msg)
     for o in default_options['astra']:
         if o not in opts:
             opts[o] = default_options['astra'][o]
@@ -161,18 +162,16 @@ def astra(tomo, center, recon, theta, **kwargs):
             with cf.ThreadPoolExecutor(ngpu) as e:
                 for gpu, slc in zip(gpu_list, slcs):
                     e.submit(astra_rec_cuda, tomo[slc], center[slc], recon[slc],
-                             theta, vol_geom, niter, proj_type, gpu, opts)
+                             theta, vol_geom, niter, proj_type, gpu, opts, astra_mod)
         else:
             astra_rec_cuda(tomo, center, recon, theta, vol_geom, niter,
-                           proj_type, None, opts)
+                           proj_type, None, opts, astra_mod=astra_mod)
     else:
         astra_rec_cpu(tomo, center, recon, theta, vol_geom, niter,
-                      proj_type, opts)
+                      proj_type, opts, astra_mod=astra_mod)
 
 
-def astra_rec_cuda(tomo, center, recon, theta, vol_geom, niter, proj_type, gpu_index, opts):
-    # Lazy import ASTRA
-    import astra as astra_mod
+def astra_rec_cuda(tomo, center, recon, theta, vol_geom, niter, proj_type, gpu_index, opts, astra_mod):
     nslices, nang, ndet = tomo.shape
     cfg = astra_mod.astra_dict(opts['method'])
     if 'extra_options' in opts:
@@ -206,9 +205,7 @@ def astra_rec_cuda(tomo, center, recon, theta, vol_geom, niter, proj_type, gpu_i
         astra_mod.projector.delete(pid)
 
 
-def astra_rec_cpu(tomo, center, recon, theta, vol_geom, niter, proj_type, opts):
-    # Lazy import ASTRA
-    import astra as astra_mod
+def astra_rec_cpu(tomo, center, recon, theta, vol_geom, niter, proj_type, opts, astra_mod):
     nslices, nang, ndet = tomo.shape
     cfg = astra_mod.astra_dict(opts['method'])
     if 'extra_options' in opts:
